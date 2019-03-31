@@ -1,16 +1,22 @@
-# od -A  -j 44 -t d2 door.wav
+# Command to run program: 'python3 wav_to_bin.py FILENAME'
 
-# take a .wav 'filename' (without extension) inside wav_files directory a
-# and create a binary file 'filename_bin'.txt of the form:
-# byte1
-# byte2
+# This program takes a .wav 'FILENAME' (without extension) inside wav_files directory
+# and create a binary file 'FILENAME_bin'.txt of the form:
+# avg absolute value of amplitude during first second (32-bit value)
+# avg absolute value of amplitude during second second (32-bit value)
 #...
-# byten
+# avg absolute value of amplitude during nth second (32-bit value)
+
+
+# Print to stdout the number of seconds that were analyzed 
+# and the number of values averaged per second
+
 
 import os
 import sys
 
 FILENAME = sys.argv[1] 
+MAX_VALUES_PER_SECOND = 9 - 1 # estimated this value by looking at 1s long .wav file
 
 # os.system("od -A d -j 44 -t d2 "  + 'wav_files/' + FILENAME + '.wav > ' +  'txt_files/' + FILENAME + '.txt' )
 
@@ -18,29 +24,44 @@ f_read = open('txt_files/' + FILENAME + ".txt", "r")
 f_write = open('txt_files/' + FILENAME + "_bin.txt", "a")
 
 
-max_num_line = sum(1 for line in open('txt_files/' + FILENAME + ".txt")) - 1
-print(max_num_line)
-
-curr_line_num = 0
+curr_value_num = 1
+curr_sum = 0
+curr_avg = 0
 for line in f_read:
 	line = line.split()
+	# loop over values in each line
 	if(len(line) == 9):
 		# skip 0th element
 		for i in range (1, 9):
-			# take absolute value of each number
+
 			curr_value = abs(int(line[i]))
-			# convert to binary (32 bits)
-			curr_value = bin(curr_value)[2:]
-			curr_value = '0'* (32-len(curr_value)) + curr_value
-			# append to filename_bin
-			f_write.write(curr_value + '\n')
-	curr_line_num+=1
+			curr_sum += curr_value
+			print(curr_value)
+
+
+			if(curr_value_num == MAX_VALUES_PER_SECOND):
+				print("reached max")
+				curr_avg = round(curr_sum/MAX_VALUES_PER_SECOND)
+				curr_value_num = 1
+				curr_sum = 0
+				print("avg: " + str(curr_avg))
+
+			else:
+				curr_value_num+=1
+
+
+
+# check if we still need to write average for last second
+if(curr_value_num != 0):
+	print("would write one more avg")
+	print("sum:", curr_sum)
+	curr_avg = round(curr_sum/MAX_VALUES_PER_SECOND)
+	print(curr_avg)
 
 f_read.close()
 f_write.close()
 
 
-# expect 4061*8 = 32488 lines (no newline)
 
 
 
