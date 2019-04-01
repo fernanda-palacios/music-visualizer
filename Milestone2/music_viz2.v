@@ -1,7 +1,7 @@
-`include "vga_adapter/vga_adapter.v"
-`include "vga_adapter/vga_address_translator.v"
-`include "vga_adapter/vga_controller.v"
-`include "vga_adapter/vga_pll.v"
+//`include "vga_adapter/vga_adapter.v"
+//`include "vga_adapter/vga_address_translator.v"
+//`include "vga_adapter/vga_controller.v"
+//`include "vga_adapter/vga_pll.v"
 
 module music_viz2
 	(
@@ -48,26 +48,26 @@ module music_viz2
 	// Create an Instance of a VGA controller - there can be only one!
 	// Define the number of colours as well as the initial background
 	// image file (.MIF) for the controller.
-	vga_adapter VGA(
-			.resetn(resetn),
-			.clock(CLOCK_50),
-			.colour(colour_out),
-			.x(x[7:0]),
-			.y(y[7:0]),
-			.plot(writeEn),
-			/* Signals for the DAC to drive the monitor. */
-			.VGA_R(VGA_R),
-			.VGA_G(VGA_G),
-			.VGA_B(VGA_B),
-			.VGA_HS(VGA_HS),
-			.VGA_VS(VGA_VS),
-			.VGA_BLANK(VGA_BLANK_N),
-			.VGA_SYNC(VGA_SYNC_N),
-			.VGA_CLK(VGA_CLK));
-		defparam VGA.RESOLUTION = "160x120";
-		defparam VGA.MONOCHROME = "FALSE";
-		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
-		defparam VGA.BACKGROUND_IMAGE = "black.mif";
+//	vga_adapter VGA(
+//			.resetn(resetn),
+//			.clock(CLOCK_50),
+//			.colour(colour_out),
+//			.x(x[7:0]),
+//			.y(y[7:0]),
+//			.plot(writeEn),
+//			/* Signals for the DAC to drive the monitor. */
+//			.VGA_R(VGA_R),
+//			.VGA_G(VGA_G),
+//			.VGA_B(VGA_B),
+//			.VGA_HS(VGA_HS),
+//			.VGA_VS(VGA_VS),
+//			.VGA_BLANK(VGA_BLANK_N),
+//			.VGA_SYNC(VGA_SYNC_N),
+//			.VGA_CLK(VGA_CLK));
+//		defparam VGA.RESOLUTION = "160x120";
+//		defparam VGA.MONOCHROME = "FALSE";
+//		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
+//		defparam VGA.BACKGROUND_IMAGE = "black.mif";
 			
 	// Put your code here. Your code should produce signals x,y,colour and writeEn/plot
 	// for the VGA controller, in addition to any other functionality your design may require.
@@ -85,13 +85,15 @@ module music_viz2
 	wire [7:0] y;
 	wire busy;
 	wire done;
+	wire [2:0] colour;
 
   	wire [5:0] curr_state;
+	wire load_black;
 	
 	assign done = ( (end_x[7:0] == x[7:0]) && (end_y == y[7:0]) );
 	
-	muvi_datapath d0(.start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]), .ring(ring_number), .line(line_number[3:0]), .colour_in(SW[2:0]), .colour_out(colour_out[2:0]), .reset(resetn), .calculate(calc), .draw(draw), .load_colour(load_colour), .clock(CLOCK_50), .x(x[7:0]), .y(y[7:0]), .wr(writeEn), .busy(busy));
-	control c0(.current_state(curr_state[5:0]), .clk(CLOCK_50), .resetn(resetn), .visualize(visualize), .load_colour(load_colour), .calc(calc), .draw(draw), .ring_number(ring_number), .line_number(line_number[3:0]), .busy(~done));
+	muvi_datapath d0(.start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]), .ring(ring_number), .line(line_number[3:0]), .colour_in(colour[2:0]), .colour_out(colour_out[2:0]), .reset(resetn), .calculate(calc), .draw(draw), .load_colour(load_colour), .clock(CLOCK_50), .x(x[7:0]), .y(y[7:0]), .wr(writeEn), .busy(busy));
+	control c0(.load_black(load_black), .current_state(curr_state[5:0]), .clk(CLOCK_50), .resetn(resetn), .visualize(visualize), .load_colour(load_colour), .calc(calc), .draw(draw), .ring_number(ring_number), .line_number(line_number[3:0]), .busy(~done), .colour_in(SW[2:0]), .colour_out(colour[2:0]));
                   
 endmodule        
                 
@@ -103,9 +105,13 @@ module control(
 	 input busy,
 	 output reg [5:0] current_state,
     output reg  load_colour, calc, draw,  ring_number,
-	 output reg [3:0] line_number
+	 output reg [3:0] line_number,
+	 input [2:0] colour_in,
+	 output reg [2:0] colour_out, 
+	 output reg load_black
     );
 	 
+
 	 reg [5:0] next_state;
 	 
     localparam  LOAD_COLOUR = 6'd0,
@@ -148,8 +154,8 @@ module control(
     always@(*)
     begin: state_table 
             case (current_state)
-                LOAD_COLOUR: next_state = visualize ? LOAD_COLOUR_WAIT : LOAD_COLOUR; // Loop in current state until value is input
-                LOAD_COLOUR_WAIT: next_state = visualize ? LOAD_COLOUR_WAIT : CALC_0; // Loop in current state until go signal goes low
+                LOAD_COLOUR: next_state = (visualize) ? LOAD_COLOUR_WAIT : LOAD_COLOUR; // Loop in current state until value is input
+                LOAD_COLOUR_WAIT: next_state = (~visualize || load_black) ? CALC_0: LOAD_COLOUR_WAIT; // Loop in current state until go signal goes low
                 CALC_0: next_state = DRAW_0;
                 DRAW_0: next_state = busy ? DRAW_0: CALC_1; 
                 CALC_1: next_state = DRAW_1;
@@ -199,9 +205,17 @@ module control(
         ring_number = 1'b0;
 
         case (current_state)
-            LOAD_COLOUR: begin
-                load_colour <= 1'b1;
-                end
+				LOAD_COLOUR_WAIT: begin
+					load_colour <= 1'b1;
+					if (load_black == 1'b1)
+					begin
+						colour_out <= 3'b000;
+					end
+					else
+					begin
+						colour_out <= colour_in;
+					end
+				end
             CALC_0: begin
                 calc = 1'b1;
 					 line_number <= 4'b0000;
@@ -347,17 +361,19 @@ module control(
     begin: state_FFs
         if(!resetn)
 		  begin
-            current_state <= LOAD_COLOUR;
+            current_state <= LOAD_COLOUR_WAIT;
 				reset_count <= 1'b1;
+				load_black <= 1'b1;
 		  end 
         else if(count[3:0] == 4'b1001)
 		  begin
             current_state <= next_state;
+				load_black <= 1'b0;
 				reset_count <= 1'b1;
 		  end 
 		  else
 		  begin
-				reset_count <= 1'b0;	
+				reset_count <= 1'b0;
 		  end		
     end // state_FFS
 endmodule
@@ -413,7 +429,8 @@ module muvi_datapath(start_x,
 							x,
 							y, 
 							wr,
-							busy);
+							busy
+							);
 	
 	input [2:0] colour_in;
 	output reg	[2:0] colour_out;

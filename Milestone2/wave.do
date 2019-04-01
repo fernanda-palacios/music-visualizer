@@ -18,20 +18,20 @@ log {/*}
 # add wave {/*} would add all items in top level simulation module.
 add wave {/*}
 add wave {/music_viz2/c0/c/*}
-add wave {/music_viz2/d0/drawline/*}
 # add wave {/music_viz2/d0/coordinates/*}
 
 force {CLOCK_50} 0 0, 1 20 -r 40
 
 # reset
-force {KEY[0]} 0 0 ps, 1 40 ps
-
+force {KEY[0]} 0 0 ps, 1 40 ps, 1 50000 ps , 1 50500 ps, 0 100040 ps, 1 100080 ps, 1 150080 ps, 1 150580 ps
 # visualize
-force {KEY[1]} 1 0 ps, 0 40 ps, 1 520 ps
+force {KEY[1]} 1 0 ps, 1 40 ps, 0 50000 ps, 1 50500 ps, 1 100040 ps, 1 100080 ps, 0 150080 ps, 1 150580 ps
+
+
 # colour (white)
 force {SW[2]} 1
 force {SW[1]} 1
 force {SW[0]} 1
 
 
-run 10000000 ps 
+run 250000 ps 

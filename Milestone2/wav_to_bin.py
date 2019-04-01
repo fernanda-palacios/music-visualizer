@@ -23,9 +23,12 @@ if(SAMPLE_RATE == 44100):
 	# this sample rate requires adjust
 	SAMPLE_RATE = 44100*2
 
-MAX_VALUES_PER_SECOND = SAMPLE_RATE - 1 # estimated this value by looking at 1s long .wav file
+MAX_VALUES_PER_SECOND = SAMPLE_RATE - 1
 
-os.system("od -A d -j 44 -t d2 "  + 'wav_files/' + FILENAME + '.wav > ' +  'txt_files/' + FILENAME + '.txt' )
+WAV_FILE_PATH = 'wav_files/' + FILENAME + '.wav'
+
+
+os.system("od -A d -j 44 -t d2 "  + WAV_FILE_PATH+ ' > ' +  'txt_files/' + FILENAME + '.txt' )
 f_read = open('txt_files/' + FILENAME + ".txt", "r")
 f_write = open('txt_files/' + FILENAME + "_bin.txt", "a")
 
