@@ -1,7 +1,7 @@
-//`include "vga_adapter/vga_adapter.v"
-//`include "vga_adapter/vga_address_translator.v"
-//`include "vga_adapter/vga_controller.v"
-//`include "vga_adapter/vga_pll.v"
+`include "vga_adapter/vga_adapter.v"
+`include "vga_adapter/vga_address_translator.v"
+`include "vga_adapter/vga_controller.v"
+`include "vga_adapter/vga_pll.v"
 
 module music_viz2
 	(
@@ -22,7 +22,7 @@ module music_viz2
 
 	input			CLOCK_50;				//	50 MHz
 	input   [9:0]   SW;
-	input   [1:0]   KEY;
+	input   [2:0]   KEY;
 
 	// Declare your inputs and outputs here
 	// Do not change the following outputs
@@ -35,11 +35,7 @@ module music_viz2
 	output	[9:0]	VGA_G;	 				//	VGA Green[9:0]
 	output	[9:0]	VGA_B;   				//	VGA Blue[9:0]
 	
-	wire resetn;
-	assign resetn = KEY[0];
-	
-	wire visualize;
-	assign visualize = ~KEY[1];
+
 	
 	// Create the colour, x, y and writeEn wires that are inputs to the controller.
 	
@@ -48,35 +44,41 @@ module music_viz2
 	// Create an Instance of a VGA controller - there can be only one!
 	// Define the number of colours as well as the initial background
 	// image file (.MIF) for the controller.
-//	vga_adapter VGA(
-//			.resetn(resetn),
-//			.clock(CLOCK_50),
-//			.colour(colour_out),
-//			.x(x[7:0]),
-//			.y(y[7:0]),
-//			.plot(writeEn),
-//			/* Signals for the DAC to drive the monitor. */
-//			.VGA_R(VGA_R),
-//			.VGA_G(VGA_G),
-//			.VGA_B(VGA_B),
-//			.VGA_HS(VGA_HS),
-//			.VGA_VS(VGA_VS),
-//			.VGA_BLANK(VGA_BLANK_N),
-//			.VGA_SYNC(VGA_SYNC_N),
-//			.VGA_CLK(VGA_CLK));
-//		defparam VGA.RESOLUTION = "160x120";
-//		defparam VGA.MONOCHROME = "FALSE";
-//		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
-//		defparam VGA.BACKGROUND_IMAGE = "black.mif";
+	vga_adapter VGA(
+			.resetn(resetn),
+			.clock(CLOCK_50),
+			.colour(colour_out),
+			.x(x[7:0]),
+			.y(y[7:0]),
+			.plot(writeEn),
+			/* Signals for the DAC to drive the monitor. */
+			.VGA_R(VGA_R),
+			.VGA_G(VGA_G),
+			.VGA_B(VGA_B),
+			.VGA_HS(VGA_HS),
+			.VGA_VS(VGA_VS),
+			.VGA_BLANK(VGA_BLANK_N),
+			.VGA_SYNC(VGA_SYNC_N),
+			.VGA_CLK(VGA_CLK));
+		defparam VGA.RESOLUTION = "160x120";
+		defparam VGA.MONOCHROME = "FALSE";
+		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
+		defparam VGA.BACKGROUND_IMAGE = "black.mif";
 			
 	// Put your code here. Your code should produce signals x,y,colour and writeEn/plot
 	// for the VGA controller, in addition to any other functionality your design may require.
 
+	wire resetn;
+	assign resetn = KEY[0];
+	
+	wire user_visualize;
+	assign user_visualize = ~KEY[1];
+	
 	wire [7:0] start_x; 
 	wire [7:0] start_y;
 	wire [7:0] end_x;
 	wire [7:0] end_y;
-	wire ring_number;
+	wire [1:0] ring_number;
 	wire [3:0] line_number;
 	wire load_colour, calc, draw;
 	wire writeEn;
@@ -90,32 +92,67 @@ module music_viz2
   	wire [5:0] curr_state;
 	wire load_black;
 	
-	assign done = ( (end_x[7:0] == x[7:0]) && (end_y == y[7:0]) );
+	assign done = ( (end_x[7:0] == x[7:0]) && (end_y == y[7:0]));
 	
-	muvi_datapath d0(.start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]), .ring(ring_number), .line(line_number[3:0]), .colour_in(colour[2:0]), .colour_out(colour_out[2:0]), .reset(resetn), .calculate(calc), .draw(draw), .load_colour(load_colour), .clock(CLOCK_50), .x(x[7:0]), .y(y[7:0]), .wr(writeEn), .busy(busy));
-	control c0(.load_black(load_black), .current_state(curr_state[5:0]), .clk(CLOCK_50), .resetn(resetn), .visualize(visualize), .load_colour(load_colour), .calc(calc), .draw(draw), .ring_number(ring_number), .line_number(line_number[3:0]), .busy(~done), .colour_in(SW[2:0]), .colour_out(colour[2:0]));
+	wire done_counting, ready_next_ring;
+	assign done_counting = !KEY[2];	
+	assign ready_next_ring = 1'b1;
+	
+	wire [1:0] next_ring_num;
+	assign next_ring_num = 2'b10;
+	
+	
+	wire start_counting, find_next_ring_num, screen_has_ring	;
+		
+	muvi_datapath d0(.start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]), .ring(ring_number[1:0]), .line(line_number[3:0]), .colour_in(colour[2:0]), .colour_out(colour_out[2:0]), .reset(resetn), .calculate(calc), .draw(draw), .load_colour(load_colour), .clock(CLOCK_50), .x(x[7:0]), .y(y[7:0]), .wr(writeEn), .busy(busy));
+	
+	control c0(.clk(CLOCK_50), 
+	.resetn(resetn), 
+	.user_visualize(user_visualize), 
+	.busy(~done), 
+	.colour_in(SW[2:0]), 
+	.done_counting(done_counting),
+	.ready_next_ring(ready_next_ring),
+	.next_ring_num(next_ring_num[1:0]), 
+	.current_state(curr_state[5:0]),
+	.load_colour(load_colour), 
+	.calc(calc),
+	.draw(draw), 
+	.start_counting(start_counting), 
+	.find_next_ring_num(find_next_ring_num),
+	.line_number(line_number[3:0]), 
+	.ring_number(ring_number[1:0]),
+	.colour_out(colour[2:0]),
+	.load_black(load_black),
+	.screen_has_ring(screen_has_ring));
                   
 endmodule        
                 
-
 module control(
     input clk,
     input resetn,
-    input visualize,
+    input user_visualize,
 	 input busy,
-	 output reg [5:0] current_state,
-    output reg  load_colour, calc, draw,  ring_number,
-	 output reg [3:0] line_number,
 	 input [2:0] colour_in,
+	 input done_counting,
+	 input ready_next_ring,
+	 input [1:0] next_ring_num,
+	 output reg [5:0] current_state,
+    output reg  load_colour, calc, draw, start_counting, find_next_ring_num,
+	 output reg [3:0] line_number,
+	 output reg [1:0] ring_number,
 	 output reg [2:0] colour_out, 
-	 output reg load_black
+	 output reg load_black, 
+	 output reg screen_has_ring
     );
 	 
-
+	 reg  next_visualize;
 	 reg [5:0] next_state;
+	
+	 reg erase;
 	 
-    localparam  LOAD_COLOUR = 6'd0,
-                LOAD_COLOUR_WAIT = 6'd1,
+    localparam  LOAD_INFO = 6'd0,
+                DRAW_OR_ERASE = 6'd1,
                 CALC_0 = 6'd2,
                 DRAW_0 = 6'd3,
                 CALC_1 = 6'd4,
@@ -147,15 +184,18 @@ module control(
                 CALC_14 = 6'd30,
                 DRAW_14 = 6'd31,
                 CALC_15 = 6'd32,
-                DRAW_15 = 6'd33; 			
+                DRAW_15 = 6'd33,
+					 COUNT_1S = 6'd34,
+					 DECIDE_COUNT_OR_FIND_RING = 6'd35,
+					 FIND_RING = 6'd36;
 
 			
     // Next state logic aka our state table
     always@(*)
     begin: state_table 
             case (current_state)
-                LOAD_COLOUR: next_state = (visualize) ? LOAD_COLOUR_WAIT : LOAD_COLOUR; // Loop in current state until value is input
-                LOAD_COLOUR_WAIT: next_state = (~visualize || load_black) ? CALC_0: LOAD_COLOUR_WAIT; // Loop in current state until go signal goes low
+                LOAD_INFO: next_state = (user_visualize || next_visualize) ? DRAW_OR_ERASE : LOAD_INFO; // Loop in current state until value is input
+                DRAW_OR_ERASE: next_state = (~user_visualize || load_black) ? CALC_0: DRAW_OR_ERASE; // Loop in current state until go signal goes low
                 CALC_0: next_state = DRAW_0;
                 DRAW_0: next_state = busy ? DRAW_0: CALC_1; 
                 CALC_1: next_state = DRAW_1;
@@ -187,9 +227,12 @@ module control(
                 CALC_14: next_state = DRAW_14;
                 DRAW_14: next_state = busy ? DRAW_14: CALC_15; 
                 CALC_15: next_state = DRAW_15;
-                DRAW_15: next_state = busy ? DRAW_15: LOAD_COLOUR; 
+                DRAW_15: next_state = busy ? DRAW_15: COUNT_1S;
+					 COUNT_1S: next_state = done_counting?  DECIDE_COUNT_OR_FIND_RING : COUNT_1S;
+					 DECIDE_COUNT_OR_FIND_RING: next_state = screen_has_ring? DRAW_OR_ERASE: FIND_RING;
+					 FIND_RING: next_state = ready_next_ring? LOAD_INFO : FIND_RING;
 			 
-            default:     next_state = LOAD_COLOUR;
+            default:     next_state = LOAD_INFO;
         endcase
     end // state_table
 	 	
@@ -198,18 +241,36 @@ module control(
     always @(*)
     begin: enable_signals
         // By default make all our signals 0
-        load_colour = 1'b0;
+        load_colour= 1'b0;
         calc = 1'b0;
         draw = 1'b0;
 		  line_number = 4'd0;
-        ring_number = 1'b0;
-
+		  start_counting <= 1'b0;
+		  find_next_ring_num <= 1'b0;
         case (current_state)
-				LOAD_COLOUR_WAIT: begin
-					load_colour <= 1'b1;
-					if (load_black == 1'b1)
+				LOAD_INFO: begin
+					screen_has_ring <= 1'b1;
+					if(user_visualize)
+					begin
+						ring_number <= 2'b00;
+					end
+					else if(next_visualize)
+					begin
+						ring_number <= ring_number + 1 ;
+					end
+				end		  
+				DRAW_OR_ERASE: begin
+					load_colour<= 1'b1;
+					if (load_black)
 					begin
 						colour_out <= 3'b000;
+						screen_has_ring <= 1'b0;
+						next_visualize <= 1'b0;
+					end
+					else if(erase)
+					begin
+						colour_out <= 3'b000;
+						screen_has_ring <= 1'b0;
 					end
 					else
 					begin
@@ -218,8 +279,8 @@ module control(
 				end
             CALC_0: begin
                 calc = 1'b1;
-					 line_number <= 4'b0000;
-                end
+					 line_number <= 4'b0000;					
+            end
             DRAW_0: begin
                 draw = 1'b1;
 					 line_number <= 4'b0000;
@@ -343,7 +404,24 @@ module control(
             DRAW_15: begin
                 draw = 1'b1;
 					 line_number <= 4'd15;
-                end					 					 
+                end
+				COUNT_1S: begin
+					start_counting <= 1'b1;
+				end
+				DECIDE_COUNT_OR_FIND_RING: begin
+					if(screen_has_ring)
+					begin
+						erase <= 1'b1;
+						next_visualize <= 1'b1;
+					end
+				
+					else
+					begin
+						find_next_ring_num <= 1'b1;
+						erase <= 1'b0;
+					end
+					
+				end
         // default:    // don't need default since we already made sure all of our outputs were assigned a value at the start of the always block
         endcase
     end // enable_signals
@@ -361,11 +439,13 @@ module control(
     begin: state_FFs
         if(!resetn)
 		  begin
-            current_state <= LOAD_COLOUR_WAIT;
+            current_state <= DRAW_OR_ERASE;
 				reset_count <= 1'b1;
 				load_black <= 1'b1;
+				// user_visualize is next thus it wont be next_visualize
+
 		  end 
-        else if(count[3:0] == 4'b1001)
+        else if(count[3:0] == 4'b1111)
 		  begin
             current_state <= next_state;
 				load_black <= 1'b0;
@@ -407,8 +487,6 @@ module up_counter    (
 endmodule 
 
 
-
-
 //centre: 80x60
 //start radius: 20
 //end radius: 40
@@ -438,7 +516,7 @@ module muvi_datapath(start_x,
 	input calculate;
 	input draw;
 	input load_colour;
-	input ring;
+	input [1:0] ring;
 	input [3:0] line;
 	output wire [7:0] start_x;
 	output wire [7:0] start_y;
@@ -457,7 +535,7 @@ module muvi_datapath(start_x,
 	reg [7:0] ex;
 	reg [7:0] ey;
 	
-	get_coord coordinates(.ring(ring), .angle(line[3:0]), .start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]));
+	get_coord coordinates(.ring(ring[1:0]), .angle(line[3:0]), .start_x(start_x[7:0]), .start_y(start_y[7:0]), .end_x(end_x[7:0]), .end_y(end_y[7:0]));
 	
 	always @ (posedge clock) 
 	begin
@@ -524,9 +602,10 @@ module muvi_datapath(start_x,
 
 endmodule 
 
+
 module get_coord(ring, angle, start_x, start_y, end_x, end_y);
 
-	input ring;
+	input [1:0] ring;
 	input [3:0] angle;
    output reg [7:0] start_x;
    output reg [7:0] start_y;
@@ -535,7 +614,7 @@ module get_coord(ring, angle, start_x, start_y, end_x, end_y);
 	
 	always @(*)
 		 begin 
-			  case (ring)
+			  case (ring[1:0])
 					0: begin
 							case (angle[3:0])
 								0: begin
@@ -636,113 +715,207 @@ module get_coord(ring, angle, start_x, start_y, end_x, end_y);
 									end	
 							endcase
 						end
-//					1: begin
-//							 case (angle)
-//								0: begin
-//									 start_x = 8'b01111000; //120
-//									 start_y = 8'b00111100; //60
-//									 end_x = 8'b10000010; //130
-//									 end_y = 8'b00111100; //60
-//									end 
-//								1: begin
-//									 start_x = 8'b01110101;/117
-//									 start_y = 8'b01001011; //75
-//									 end_x = 8'b01111110; //126
-//									 end_y = 8'b01001111; //79
-//									end 
-//								2: begin
-//									 start_x = 8'b01101100;//108
-//									 start_y = 8'b01011000; //88
-//									 end_x = 8'b01110011; //115
-//									 end_y = 8'b01011111; //95
-//									end 
-//								3: begin
-//									 start_x = 8'b01011111; //95
-//									 start_y = 8'b01100001; //97
-//									 end_x = 8'b01100011; //99
-//									 end_y = 8'b01101010; //106
-//									end 
-//								4: begin
-//									 start_x = 8'b01010000; //80
-//									 start_y = 8'b01100100; //100
-//									 end_x = 8'b01010000; //80
-//									 end_y = 8'b01101110; //110
-//									end 
-//								5: begin
-//									 start_x = 8'b01000001; //65
-//									 start_y = 8'b01100001; //97
-//									 end_x = 8'b00111101; //61
-//									 end_y = 8'b01101010; //106
-//									end 
-//								6: begin
-//									 start_x = 8'b00110100; //52
-//									 start_y = 8'b01011000; //88
-//									 end_x = 8'b00101101; //45
-//									 end_y = 8'b01011111; //95
-//									end 
-//								7: begin
-//									 start_x = 8'b00101011; //43
-//									 start_y = 8'b01001011; //75
-//									 end_x = 8'b00100010; //34
-//									 end_y = 8'b01001111; //79
-//									end 
-//								8: begin
-//									 start_x = 8'b00101000; //40
-//									 start_y = 8'b00111100; //60
-//									 end_x = 8'b00011110; //30
-//									 end_y = 8'b00111100; //60
-//									end 
-//								9: begin
-//									 start_x = 8'b00101011; //43
-//									 start_y = 8'b00101101; //45
-//									 end_x = 8'b00100010; //34
-//									 end_y = 8'b00101001; //41
-//									end
-//								10: begin
-//									 start_x = 8'b00110100; //52
-//									 start_y = 8'b00100000; //32
-//									 end_x = 8'b00101101; //45
-//									 end_y = 8'b00011001; //25
-//									end 
-//								11: begin
-//									 start_x = 8'b01000001; //65
-//									 start_y = 8'b00010111; //23
-//									 end_x = 8'b00111101; //61
-//									 end_y = 8'b00001110; //14
-//									end 
-//								12: begin
-//									 start_x = 8'b01010000; //80
-//									 start_y = 8'b00010100; //20
-//									 end_x = 8'b01010000; //80
-//									 end_y = 8'b00001010; //10
-//									end 
-//								13: begin
-//									 start_x = 8'b01011111; //95
-//									 start_y = 8'b00010111; //23
-//									 end_x = 8'b01100011; //99
-//									 end_y = 8'b00001110; //14
-//									end 
-//								14: begin
-//									 start_x = 8'b01101100; //108
-//									 start_y = 8'b00100000; //32
-//									 end_x = 8'b01110011; //115
-//									 end_y = 8'b00011001; //25
-//									end 
-//								15: begin
-//									 start_x = 8'b01110101; //117
-//									 start_y = 8'b00101101; //45
-//									 end_x = 8'b01111110; //126
-//									 end_y = 8'b00101001; //41
-//									end
-//						end
-//					2: begin
-//							 start_x = $realtobits(start_rad*0.70711 + 80);
-//							 start_y = $realtobits(start_rad*0.70711 + 60);
-//							 end_x = $realtobits(end_rad*0.70711 + 80);
-//							 end_y = $realtobits(end_rad*0.70711 + 60);
-//						end
-//					3:
-//					4:	
+					1: begin
+							 case (angle[3:0])
+								0: begin
+									 start_x = 8'b01111000; //120
+									 start_y = 8'b00111100; //60
+									 end_x = 8'b10000010; //130
+									 end_y = 8'b00111100; //60
+									end 
+								1: begin
+									 start_x = 8'b01110101; //117
+									 start_y = 8'b01001011; //75
+									 end_x = 8'b01111110; //126
+									 end_y = 8'b01001111; //79
+									end 
+								2: begin
+									 start_x = 8'b01101100;//108
+									 start_y = 8'b01011000; //88
+									 end_x = 8'b01110011; //115
+									 end_y = 8'b01011111; //95
+									end 
+								3: begin
+									 start_x = 8'b01011111; //95
+									 start_y = 8'b01100001; //97
+									 end_x = 8'b01100011; //99
+									 end_y = 8'b01101010; //106
+									end 
+								4: begin
+									 start_x = 8'b01010000; //80
+									 start_y = 8'b01100100; //100
+									 end_x = 8'b01010000; //80
+									 end_y = 8'b01101110; //110
+									end 
+								5: begin
+									 start_x = 8'b01000001; //65
+									 start_y = 8'b01100001; //97
+									 end_x = 8'b00111101; //61
+									 end_y = 8'b01101010; //106
+									end 
+								6: begin
+									 start_x = 8'b00110100; //52
+									 start_y = 8'b01011000; //88
+									 end_x = 8'b00101101; //45
+									 end_y = 8'b01011111; //95
+									end 
+								7: begin
+									 start_x = 8'b00101011; //43
+									 start_y = 8'b01001011; //75
+									 end_x = 8'b00100010; //34
+									 end_y = 8'b01001111; //79
+									end 
+								8: begin
+									 start_x = 8'b00101000; //40
+									 start_y = 8'b00111100; //60
+									 end_x = 8'b00011110; //30
+									 end_y = 8'b00111100; //60
+									end 
+								9: begin
+									 start_x = 8'b00101011; //43
+									 start_y = 8'b00101101; //45
+									 end_x = 8'b00100010; //34
+									 end_y = 8'b00101001; //41
+									end
+								10: begin
+									 start_x = 8'b00110100; //52
+									 start_y = 8'b00100000; //32
+									 end_x = 8'b00101101; //45
+									 end_y = 8'b00011001; //25
+									end 
+								11: begin
+									 start_x = 8'b01000001; //65
+									 start_y = 8'b00010111; //23
+									 end_x = 8'b00111101; //61
+									 end_y = 8'b00001110; //14
+									end 
+								12: begin
+									 start_x = 8'b01010000; //80
+									 start_y = 8'b00010100; //20
+									 end_x = 8'b01010000; //80
+									 end_y = 8'b00001010; //10
+									end 
+								13: begin
+									 start_x = 8'b01011111; //95
+									 start_y = 8'b00010111; //23
+									 end_x = 8'b01100011; //99
+									 end_y = 8'b00001110; //14
+									end 
+								14: begin
+									 start_x = 8'b01101100; //108
+									 start_y = 8'b00100000; //32
+									 end_x = 8'b01110011; //115
+									 end_y = 8'b00011001; //25
+									end 
+								15: begin
+									 start_x = 8'b01110101; //117
+									 start_y = 8'b00101101; //45
+									 end_x = 8'b01111110; //126
+									 end_y = 8'b00101001; //41
+									end
+							endcase
+						end
+					2: begin
+							case (angle[3:0])
+								0: begin
+									start_x = 8'b10000010; //130
+									start_y = 8'b00111100; //60
+							 		end_x = 8'b10001100; //140
+									end_y = 8'b00111100; //60
+									end	
+								1: begin
+									start_x = 8'b01111110; //126
+									start_y = 8'b01001111; //79
+							 		end_x = 8'b10000111; //135
+									end_y = 8'b01010011; //83
+									end
+								2: begin
+									start_x = 8'b01110011; //115
+									start_y = 8'b01011111; //95
+							 		end_x = 8'b01111010; //122
+									end_y = 8'b01100110; //102
+									end
+								3: begin
+									start_x = 8'b01100011; //99
+									start_y = 8'b01101010; //106
+							 		end_x = 8'b01100111; //103
+									end_y = 8'b01110011; //115
+									end
+								4: begin
+									start_x = 8'b01010000; //80
+									start_y = 8'b01101110; //110
+							 		end_x = 8'b01010000; //80
+									end_y = 8'b01111000; //120
+									end
+								5: begin
+									start_x = 8'b00111101; //61
+									start_y = 8'b01101010; //106
+							 		end_x = 8'b00111001; //57
+									end_y = 8'b01110011; //115
+									end
+								6: begin
+									start_x = 8'b00101101; //45
+									start_y = 8'b01011111; //95
+							 		end_x = 8'b00100110; //38
+									end_y = 8'b01100110; //102
+									end
+								7: begin
+									start_x = 8'b00100010; //34
+									start_y = 8'b01001111; //79
+							 		end_x = 8'b00011001; //25
+									end_y = 8'b01010011; //83
+									end
+								8: begin
+									start_x = 8'b00011110; //30
+									start_y = 8'b00111100; //60
+							 		end_x = 8'b00010100; //20
+									end_y = 8'b00111100; //60
+									end
+								9: begin
+									start_x = 8'b00100010; //34
+									start_y = 8'b00101001; //41
+							 		end_x = 8'b00011001; //25
+									end_y = 8'b00100101; //37
+									end
+								10: begin
+									start_x = 8'b00101101; //45
+									start_y = 8'b00011001; //25
+							 		end_x = 8'b00100110; //38
+									end_y = 8'b00010010; //18
+									end
+								11: begin
+									start_x = 8'b00111101; //61
+									start_y = 8'b00001110; //14
+							 		end_x = 8'b00111001; //57
+									end_y = 8'b00000101; //5
+									end
+								12: begin
+									start_x = 8'b01010000; //80
+									start_y = 8'b00001010; //10
+							 		end_x = 8'b01010000; //80
+									end_y = 8'b00000000; //0
+									end
+								13: begin
+									start_x = 8'b01100011; //99
+									start_y = 8'b00001110; //14
+							 		end_x = 8'b01100111; //103
+									end_y = 8'b00000101; //5
+									end
+								14: begin
+									start_x = 8'b01110011; //115
+									start_y = 8'b00011001; //25
+							 		end_x = 8'b01111010; //122
+									end_y = 8'b00010010; //18
+									end
+								15: begin
+									start_x = 8'b01111110; //126
+									start_y = 8'b00101001; //41
+							 		end_x = 8'b10000111; //135
+									end_y = 8'b00100101; //37
+									end
+							endcase
+						end
+
 					default: begin
 									start_x = 8'b00000000;
 									start_y = 8'b00000000;
@@ -751,7 +924,7 @@ module get_coord(ring, angle, start_x, start_y, end_x, end_y);
 								end
 			  endcase
 		 end
-endmodule 
+endmodule  
 
 
 // File: linedraw.v
