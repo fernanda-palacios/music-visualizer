@@ -1,3 +1,3 @@
-# CSC258-Music-Viz
+# Music Visualizer
 
 A music visualizer which connects to  Altera's DE1-Soc board FPGA (VGA display) and is implemented in verilog.
